@@ -5,7 +5,7 @@ name: Publish resource pack
 # silently and ship with the next bump.
 on:
   push:
-    branches: [main]
+    branches: [main, 'test-**']
     paths:
       - 'assets/pack.mcmeta'
   workflow_dispatch:
@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 env:
-  MODRINTH_SLUG: troty-energy-research-facility-resource-pack
+  MODRINTH_SLUG: terf-test-resourcepack
   GAME_VERSION: "1.21.11"
   # Set to "false" to skip creating a GitHub release on each version bump.
   CREATE_GITHUB_RELEASE: "true"
