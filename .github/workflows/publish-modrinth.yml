@@ -2,12 +2,12 @@ name: Publish to Modrinth
 
 on:
   push:
-    # TODO(before-upstream-pr): drop 'ci/**' — only here so push to the test
-    # branch fires the workflow without needing the file on main yet.
+    # TODO(before-upstream-pr): drop 'ci/**'.
     branches: [main, 'ci/**']
     paths-ignore:
       - '**.md'
       - '.gitignore'
+      - '.github/**'
       - 'LICENSE.txt'
   workflow_dispatch:
     inputs:
@@ -28,6 +28,9 @@ env:
   MODRINTH_RESOURCEPACK_SLUG: terf-test-resourcepack
   GAME_VERSION: "1.21.4"
   RESOURCEPACK_FORMAT: 46
+  # Bump VERSION_MAJOR_MINOR when cutting a real new major/minor; patch is
+  # auto-derived from total commit count on the branch.
+  VERSION_MAJOR_MINOR: "1.0"
 
 jobs:
   publish:
@@ -35,20 +38,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0   # need full history for the build counter
 
       - name: Compute version
         id: ver
         run: |
-          DATE=$(git show -s --format=%cd --date=format:%Y.%m.%d HEAD)
-          SHA=$(git rev-parse --short HEAD)
-          VERSION="${DATE}-${SHA}"
+          BUILD=$(git rev-list --count HEAD)
+          VERSION="${VERSION_MAJOR_MINOR}.${BUILD}"
+          NAME="TERF build ${BUILD}"
           if [ -n "${{ github.event.inputs.version_suffix }}" ]; then
             VERSION="${VERSION}-${{ github.event.inputs.version_suffix }}"
+            NAME="${NAME} (${{ github.event.inputs.version_suffix }})"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "name=TERF ${DATE//./-} (${SHA})" >> "$GITHUB_OUTPUT"
-          echo "Computed version: ${VERSION}"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "Computed: ${VERSION} — ${NAME}"
 
       - name: Build datapack zip
         run: |
