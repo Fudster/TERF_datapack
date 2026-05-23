@@ -2,8 +2,7 @@ name: Publish datapack to Modrinth
 
 on:
   push:
-    # TODO(before-upstream-pr): drop 'ci/**'.
-    branches: [main, 'ci/**']
+    branches: [main]
     paths:
       - 'data/**'
       - 'pack.mcmeta'
@@ -22,8 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # TODO(before-upstream-pr): swap to troty-energy-research-facility
-  MODRINTH_SLUG: terf-test-datapack
+  MODRINTH_SLUG: troty-energy-research-facility
   GAME_VERSION: "1.21.11"
   # Bump when cutting a real new major/minor; patch is the commit count.
   VERSION_MAJOR_MINOR: "1.0"
