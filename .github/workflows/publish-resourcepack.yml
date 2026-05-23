@@ -1,14 +1,14 @@
-name: Publish to Modrinth
+name: Publish resource pack to Modrinth
 
 on:
   push:
     # TODO(before-upstream-pr): drop 'ci/**'.
     branches: [main, 'ci/**']
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
-      - '.github/**'
+    paths:
+      - 'assets/**'
+      - 'pack.png'
       - 'LICENSE.txt'
+      - '.github/workflows/publish-resourcepack.yml'
   workflow_dispatch:
     inputs:
       version_suffix:
@@ -17,19 +17,15 @@ on:
         default: ''
 
 concurrency:
-  group: modrinth-publish
+  group: modrinth-publish-resourcepack
   cancel-in-progress: false
 
 env:
-  # Swap these to TERF's real slugs before the upstream PR:
-  #   troty-energy-research-facility
-  #   troty-energy-research-facility-resource-pack
-  MODRINTH_DATAPACK_SLUG: terf-test-datapack
-  MODRINTH_RESOURCEPACK_SLUG: terf-test-resourcepack
+  # TODO(before-upstream-pr): swap to troty-energy-research-facility-resource-pack
+  MODRINTH_SLUG: terf-test-resourcepack
   GAME_VERSION: "1.21.11"
   RESOURCEPACK_FORMAT: 75
-  # Bump VERSION_MAJOR_MINOR when cutting a real new major/minor; patch is
-  # auto-derived from total commit count on the branch.
+  # Bump when cutting a real new major/minor; patch is the commit count.
   VERSION_MAJOR_MINOR: "1.0"
 
 jobs:
@@ -38,14 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # need full history for the build counter
+          fetch-depth: 0
 
       - name: Compute version
         id: ver
         run: |
           BUILD=$(git rev-list --count HEAD)
           VERSION="${VERSION_MAJOR_MINOR}.${BUILD}"
-          NAME="TERF build ${BUILD}"
+          NAME="TERF resource pack build ${BUILD}"
           if [ -n "${{ github.event.inputs.version_suffix }}" ]; then
             VERSION="${VERSION}-${{ github.event.inputs.version_suffix }}"
             NAME="${NAME} (${{ github.event.inputs.version_suffix }})"
@@ -54,18 +50,12 @@ jobs:
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "Computed: ${VERSION} — ${NAME}"
 
-      - name: Build datapack zip
-        run: |
-          mkdir -p dist
-          zip -r "dist/TERF-datapack-${{ steps.ver.outputs.version }}.zip" \
-              data pack.mcmeta pack.png LICENSE.txt README.md
-          ls -lh dist/
-
       - name: Build resource pack zip
         run: |
-          # The assets/ dir has no pack.mcmeta of its own — resource packs use
-          # a different pack_format than datapacks, so we synthesize one.
-          cat > assets/pack.mcmeta <<EOF
+          # assets/ ships without its own pack.mcmeta — synthesize one here.
+          # RP pack_format differs from datapack pack_format for the same MC version.
+          if [ ! -f assets/pack.mcmeta ]; then
+            cat > assets/pack.mcmeta <<EOF
           {
             "pack": {
               "pack_format": ${{ env.RESOURCEPACK_FORMAT }},
@@ -73,29 +63,18 @@ jobs:
             }
           }
           EOF
-          cp pack.png assets/pack.png
+          fi
+          if [ ! -f assets/pack.png ]; then
+            cp pack.png assets/pack.png
+          fi
+          mkdir -p dist
           (cd assets && zip -r "../dist/TERF-resourcepack-${{ steps.ver.outputs.version }}.zip" .)
           ls -lh dist/
 
-      - name: Upload datapack to Modrinth
+      - name: Upload to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          modrinth-id: ${{ env.MODRINTH_DATAPACK_SLUG }}
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          files: dist/TERF-datapack-*.zip
-          name: ${{ steps.ver.outputs.name }}
-          version: ${{ steps.ver.outputs.version }}
-          version-type: release
-          loaders: datapack
-          game-versions: ${{ env.GAME_VERSION }}
-          changelog: |
-            Automated publish from commit ${{ github.sha }}.
-            See https://github.com/${{ github.repository }}/commit/${{ github.sha }}
-
-      - name: Upload resource pack to Modrinth
-        uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          modrinth-id: ${{ env.MODRINTH_RESOURCEPACK_SLUG }}
+          modrinth-id: ${{ env.MODRINTH_SLUG }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: dist/TERF-resourcepack-*.zip
           name: ${{ steps.ver.outputs.name }}
