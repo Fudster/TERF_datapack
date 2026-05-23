@@ -26,8 +26,8 @@ env:
   #   troty-energy-research-facility-resource-pack
   MODRINTH_DATAPACK_SLUG: terf-test-datapack
   MODRINTH_RESOURCEPACK_SLUG: terf-test-resourcepack
-  GAME_VERSION: "1.21.4"
-  RESOURCEPACK_FORMAT: 46
+  GAME_VERSION: "1.21.11"
+  RESOURCEPACK_FORMAT: 75
   # Bump VERSION_MAJOR_MINOR when cutting a real new major/minor; patch is
   # auto-derived from total commit count on the branch.
   VERSION_MAJOR_MINOR: "1.0"
