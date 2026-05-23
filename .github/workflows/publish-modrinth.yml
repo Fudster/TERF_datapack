@@ -2,11 +2,12 @@ name: Publish to Modrinth
 
 on:
   push:
-    branches: [main]
+    # TODO(before-upstream-pr): drop 'ci/**' — only here so push to the test
+    # branch fires the workflow without needing the file on main yet.
+    branches: [main, 'ci/**']
     paths-ignore:
       - '**.md'
       - '.gitignore'
-      - '.github/**'
       - 'LICENSE.txt'
   workflow_dispatch:
     inputs:
