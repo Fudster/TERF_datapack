@@ -1,68 +1,62 @@
-name: Publish resource pack to Modrinth
+name: Publish resource pack
 
+# Fires only when assets/pack.mcmeta changes — bumping its "version" field
+# IS the release action. Texture/sound edits between bumps accumulate
+# silently and ship with the next bump.
 on:
   push:
     branches: [main]
     paths:
-      - 'assets/**'
-      - 'pack.png'
-      - 'pack.mcmeta'   # so a version bump also republishes the RP
-      - 'LICENSE.txt'
-      - '.github/workflows/publish-resourcepack.yml'
+      - 'assets/pack.mcmeta'
   workflow_dispatch:
-    inputs:
-      version_suffix:
-        description: 'Optional suffix appended to the auto version (e.g. "rc1")'
-        required: false
-        default: ''
 
 concurrency:
-  group: modrinth-publish-resourcepack
+  group: publish-resourcepack
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 env:
   MODRINTH_SLUG: troty-energy-research-facility-resource-pack
   GAME_VERSION: "1.21.11"
-  RESOURCEPACK_FORMAT: 75
-  # Major.minor read from pack.mcmeta's "version" field; patch = commit count.
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Compute version
+      - name: Read version from assets/pack.mcmeta
         id: ver
         run: |
-          BUILD=$(git rev-list --count HEAD)
-          MAJOR_MINOR=$(jq -r '.pack.version // "1.0"' pack.mcmeta)
-          VERSION="${MAJOR_MINOR}.${BUILD}"
-          NAME="TERF resource pack build ${BUILD}"
-          if [ -n "${{ github.event.inputs.version_suffix }}" ]; then
-            VERSION="${VERSION}-${{ github.event.inputs.version_suffix }}"
-            NAME="${NAME} (${{ github.event.inputs.version_suffix }})"
+          VERSION=$(jq -r '.pack.version' assets/pack.mcmeta)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::assets/pack.mcmeta is missing a .pack.version field"
+            exit 1
           fi
+          TAG="resourcepack-v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
-          echo "Computed: ${VERSION} — ${NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "name=TERF resource pack ${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Computed: ${VERSION} (tag ${TAG})"
+
+      - name: Skip if release already exists
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.ver.outputs.tag }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release ${{ steps.ver.outputs.tag }} already exists — nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build resource pack zip
+        if: steps.gate.outputs.skip != 'true'
         run: |
-          # assets/ ships without its own pack.mcmeta — synthesize one here.
-          # RP pack_format differs from datapack pack_format for the same MC version.
-          if [ ! -f assets/pack.mcmeta ]; then
-            cat > assets/pack.mcmeta <<EOF
-          {
-            "pack": {
-              "pack_format": ${{ env.RESOURCEPACK_FORMAT }},
-              "description": "TERF resource pack"
-            }
-          }
-          EOF
-          fi
+          # Use repo's pack.png as the RP icon if assets/ doesn't have its own.
           if [ ! -f assets/pack.png ]; then
             cp pack.png assets/pack.png
           fi
@@ -71,6 +65,7 @@ jobs:
           ls -lh dist/
 
       - name: Upload to Modrinth
+        if: steps.gate.outputs.skip != 'true'
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ env.MODRINTH_SLUG }}
@@ -84,3 +79,12 @@ jobs:
           changelog: |
             Automated publish from commit ${{ github.sha }}.
             See https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+
+      - name: Create GitHub release
+        if: steps.gate.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.name }}
+          files: dist/TERF-resourcepack-*.zip
+          generate_release_notes: true
