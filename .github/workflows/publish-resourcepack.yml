@@ -6,6 +6,7 @@ on:
     paths:
       - 'assets/**'
       - 'pack.png'
+      - 'pack.mcmeta'   # so a version bump also republishes the RP
       - 'LICENSE.txt'
       - '.github/workflows/publish-resourcepack.yml'
   workflow_dispatch:
@@ -23,8 +24,7 @@ env:
   MODRINTH_SLUG: troty-energy-research-facility-resource-pack
   GAME_VERSION: "1.21.11"
   RESOURCEPACK_FORMAT: 75
-  # Bump when cutting a real new major/minor; patch is the commit count.
-  VERSION_MAJOR_MINOR: "1.0"
+  # Major.minor read from pack.mcmeta's "version" field; patch = commit count.
 
 jobs:
   publish:
@@ -38,7 +38,8 @@ jobs:
         id: ver
         run: |
           BUILD=$(git rev-list --count HEAD)
-          VERSION="${VERSION_MAJOR_MINOR}.${BUILD}"
+          MAJOR_MINOR=$(jq -r '.pack.version // "1.0"' pack.mcmeta)
+          VERSION="${MAJOR_MINOR}.${BUILD}"
           NAME="TERF resource pack build ${BUILD}"
           if [ -n "${{ github.event.inputs.version_suffix }}" ]; then
             VERSION="${VERSION}-${{ github.event.inputs.version_suffix }}"
