@@ -2,7 +2,8 @@ name: Publish resource pack to Modrinth
 
 on:
   push:
-    branches: [main]
+    # TODO(before-upstream-pr): drop 'ci/**'.
+    branches: [main, 'ci/**']
     paths:
       - 'assets/**'
       - 'pack.png'
@@ -20,7 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MODRINTH_SLUG: troty-energy-research-facility-resource-pack
+  # TODO(before-upstream-pr): swap to troty-energy-research-facility-resource-pack
+  MODRINTH_SLUG: terf-test-resourcepack
   GAME_VERSION: "1.21.11"
   RESOURCEPACK_FORMAT: 75
   # Bump when cutting a real new major/minor; patch is the commit count.
