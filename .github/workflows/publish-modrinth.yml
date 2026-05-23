@@ -1,0 +1,103 @@
+name: Publish to Modrinth
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.github/**'
+      - 'LICENSE.txt'
+  workflow_dispatch:
+    inputs:
+      version_suffix:
+        description: 'Optional suffix appended to the auto version (e.g. "rc1")'
+        required: false
+        default: ''
+
+concurrency:
+  group: modrinth-publish
+  cancel-in-progress: false
+
+env:
+  # Swap these to TERF's real slugs before the upstream PR:
+  #   troty-energy-research-facility
+  #   troty-energy-research-facility-resource-pack
+  MODRINTH_DATAPACK_SLUG: terf-test-datapack
+  MODRINTH_RESOURCEPACK_SLUG: terf-test-resourcepack
+  GAME_VERSION: "1.21.4"
+  RESOURCEPACK_FORMAT: 46
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Compute version
+        id: ver
+        run: |
+          DATE=$(git show -s --format=%cd --date=format:%Y.%m.%d HEAD)
+          SHA=$(git rev-parse --short HEAD)
+          VERSION="${DATE}-${SHA}"
+          if [ -n "${{ github.event.inputs.version_suffix }}" ]; then
+            VERSION="${VERSION}-${{ github.event.inputs.version_suffix }}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "name=TERF ${DATE//./-} (${SHA})" >> "$GITHUB_OUTPUT"
+          echo "Computed version: ${VERSION}"
+
+      - name: Build datapack zip
+        run: |
+          mkdir -p dist
+          zip -r "dist/TERF-datapack-${{ steps.ver.outputs.version }}.zip" \
+              data pack.mcmeta pack.png LICENSE.txt README.md
+          ls -lh dist/
+
+      - name: Build resource pack zip
+        run: |
+          # The assets/ dir has no pack.mcmeta of its own — resource packs use
+          # a different pack_format than datapacks, so we synthesize one.
+          cat > assets/pack.mcmeta <<EOF
+          {
+            "pack": {
+              "pack_format": ${{ env.RESOURCEPACK_FORMAT }},
+              "description": "TERF resource pack"
+            }
+          }
+          EOF
+          cp pack.png assets/pack.png
+          (cd assets && zip -r "../dist/TERF-resourcepack-${{ steps.ver.outputs.version }}.zip" .)
+          ls -lh dist/
+
+      - name: Upload datapack to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ env.MODRINTH_DATAPACK_SLUG }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: dist/TERF-datapack-*.zip
+          name: ${{ steps.ver.outputs.name }}
+          version: ${{ steps.ver.outputs.version }}
+          version-type: release
+          loaders: datapack
+          game-versions: ${{ env.GAME_VERSION }}
+          changelog: |
+            Automated publish from commit ${{ github.sha }}.
+            See https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+
+      - name: Upload resource pack to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ env.MODRINTH_RESOURCEPACK_SLUG }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: dist/TERF-resourcepack-*.zip
+          name: ${{ steps.ver.outputs.name }}
+          version: ${{ steps.ver.outputs.version }}
+          version-type: release
+          loaders: minecraft
+          game-versions: ${{ env.GAME_VERSION }}
+          changelog: |
+            Automated publish from commit ${{ github.sha }}.
+            See https://github.com/${{ github.repository }}/commit/${{ github.sha }}
