@@ -20,6 +20,8 @@ permissions:
 env:
   MODRINTH_SLUG: troty-energy-research-facility-resource-pack
   GAME_VERSION: "1.21.11"
+  # Set to "false" to skip creating a GitHub release on each version bump.
+  CREATE_GITHUB_RELEASE: "true"
 
 jobs:
   publish:
@@ -41,17 +43,26 @@ jobs:
           echo "name=TERF resource pack ${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Computed: ${VERSION} (tag ${TAG})"
 
-      - name: Skip if release already exists
+      - name: Skip if this version was already published
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
+          SKIP=false
           if gh release view "${{ steps.ver.outputs.tag }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release ${{ steps.ver.outputs.tag }} already exists — nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub release ${{ steps.ver.outputs.tag }} exists."
+            SKIP=true
           fi
+          EXISTS=$(curl -sS -H "Authorization: $MODRINTH_TOKEN" \
+            "https://api.modrinth.com/v2/project/${MODRINTH_SLUG}/version" \
+            | jq -r --arg v "${{ steps.ver.outputs.version }}" \
+                '[.[] | select(.version_number == $v)] | length')
+          if [ "$EXISTS" -gt 0 ]; then
+            echo "Modrinth already has version ${{ steps.ver.outputs.version }}."
+            SKIP=true
+          fi
+          echo "skip=${SKIP}" >> "$GITHUB_OUTPUT"
 
       - name: Build resource pack zip
         if: steps.gate.outputs.skip != 'true'
@@ -81,7 +92,7 @@ jobs:
             See https://github.com/${{ github.repository }}/commit/${{ github.sha }}
 
       - name: Create GitHub release
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.gate.outputs.skip != 'true' && env.CREATE_GITHUB_RELEASE == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
